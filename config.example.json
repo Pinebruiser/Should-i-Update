@@ -1,0 +1,15 @@
+{
+  "provider": "gemini",
+  "curr_model": "gemini-3.8-flash",
+  "saved_models": {
+    "gemini": "gemini-3.8-flash",
+    "groq": "openai/gpt-oss-120b",
+    "claude": "claude-3-5-haiku-20241022",
+    "openai": "gpt-4o-mini"
+  },
+  "check_aur": true,
+  "aur_helper": "yay",
+  "update_command": "sudo pacman -Syu",
+  "check_arch_news": true
+}
+

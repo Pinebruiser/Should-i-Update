@@ -1,0 +1,529 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Should-i-Update: Intelligent Arch Linux Package Update Decision Assistant
+# ==============================================================================
+set -eo pipefail
+
+VERSION="0.1.0-beta.1"
+
+# ANSI Colors
+if [[ -t 1 && -z "${NO_COLOR}" ]]; then
+    export FORCE_COLOR=1
+    C_RESET="\033[0m"
+    C_BOLD="\033[1m"
+    C_DIM="\033[2m"
+    C_RED="\033[31m"
+    C_GREEN="\033[32m"
+    C_YELLOW="\033[33m"
+    C_BLUE="\033[34m"
+    C_CYAN="\033[36m"
+    C_GRAY="\033[90m"
+else
+    C_RESET=""
+    C_BOLD=""
+    C_DIM=""
+    C_RED=""
+    C_GREEN=""
+    C_YELLOW=""
+    C_BLUE=""
+    C_CYAN=""
+    C_GRAY=""
+fi
+
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE_DIR=""
+
+if [[ -d "${SCRIPT_DIR}/engine" ]]; then
+    ENGINE_DIR="${SCRIPT_DIR}"
+elif [[ -d "${HOME}/.local/share/should-i-update/engine" ]]; then
+    ENGINE_DIR="${HOME}/.local/share/should-i-update"
+elif [[ -d "/usr/share/should-i-update/engine" ]]; then
+    ENGINE_DIR="/usr/share/should-i-update"
+else
+    echo -e "${C_RED}[!] Error: Could not locate Should-i-Update engine directory.${C_RESET}" >&2
+    exit 1
+fi
+
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/should-i-update/config.json"
+
+read_config_val() {
+    local key="$1"
+    local default_val="$2"
+    if [[ -f "${CONFIG_FILE}" ]]; then
+        python3 -c "import json; cfg = json.load(open('${CONFIG_FILE}')); val = cfg.get('${key}', '${default_val}'); print(str(val).lower() if isinstance(val, bool) else val)" 2>/dev/null || echo "${default_val}"
+    else
+        echo "${default_val}"
+    fi
+}
+
+handle_reset_key() {
+    local silent="$1"
+    local current_prov="$(read_config_val "provider" "gemini")"
+    current_prov="$(echo "${current_prov}" | tr '[:upper:]' '[:lower:]')"
+
+    secret-tool clear service should-i-update provider "${current_prov}" 2>/dev/null || true
+
+    if [[ "${silent}" == "--silent" ]]; then
+        return 0
+    fi
+
+    echo -e "${C_GREEN}✓ API key for current provider (${current_prov}) cleared from Linux Secret Service.${C_RESET}"
+    echo -e "\nWhat would you like to do next?"
+    echo -e "  1) Use a different key with the ${C_BOLD}same provider${C_RESET} (${current_prov}):"
+    echo -e "     Run: ${C_CYAN}should-i-update --replace-key${C_RESET}"
+    echo -e "  2) Switch to a ${C_BOLD}different provider${C_RESET}:"
+    echo -e "     Run: ${C_CYAN}should-i-update --change-provider${C_RESET}\n"
+    exit 0
+}
+
+handle_replace_key() {
+    local current_prov="$(read_config_val "provider" "gemini")"
+    current_prov="$(echo "${current_prov}" | tr '[:upper:]' '[:lower:]')"
+
+    echo -e "${C_CYAN}:: Replace API Key for current provider:${C_RESET} ${C_BOLD}${current_prov}${C_RESET}"
+    echo -ne "${C_BOLD}Paste new ${current_prov^^} API key (input hidden): ${C_RESET}"
+    if [[ -t 0 ]]; then
+        read -rs new_key
+        echo ""
+    else
+        read -r new_key || new_key=""
+    fi
+
+    if [[ -z "${new_key}" ]]; then
+        echo -e "${C_RED}[!] No key entered. Operation cancelled.${C_RESET}" >&2
+        exit 1
+    fi
+
+    printf "%s" "${new_key}" | secret-tool store --label="Should-i-Update API Key (${current_prov})" service should-i-update provider "${current_prov}"
+    echo -e "${C_GREEN}✓ API key for '${current_prov}' successfully updated in Linux Secret Service.${C_RESET}"
+    exit 0
+}
+
+handle_change_provider() {
+    local old_prov="$(read_config_val "provider" "gemini")"
+
+    # Reuse reset-key logic to delete current key and avoid duplicate code
+    handle_reset_key --silent
+
+    echo -e "${C_BLUE}==>${C_RESET} ${C_BOLD}Select new LLM Provider:${C_RESET}"
+    echo -e "  ${C_CYAN}1)${C_RESET} ${C_BOLD}Google Gemini${C_RESET}   ${C_GREEN}(Free Tier available, fast, recommended)${C_RESET}"
+    echo -e "  ${C_CYAN}2)${C_RESET} ${C_BOLD}Groq Cloud${C_RESET}      ${C_GREEN}(Free Tier, ultra-fast 120B open model)${C_RESET}"
+    echo -e "  ${C_CYAN}3)${C_RESET} ${C_BOLD}Anthropic Claude${C_RESET} (Claude 3.5 Haiku / Sonnet)"
+    echo -e "  ${C_CYAN}4)${C_RESET} ${C_BOLD}OpenAI${C_RESET}          (GPT-4o-mini / GPT-4o)"
+
+    local new_prov=""
+
+    while [[ -z "${new_prov}" ]]; do
+        echo -ne "\n${C_BOLD}Select provider [1-4] (default: 1): ${C_RESET}"
+        if [[ -t 0 ]]; then
+            read -r prov_choice
+        else
+            read -r prov_choice || prov_choice="1"
+        fi
+        prov_choice="${prov_choice:-1}"
+        case "${prov_choice}" in
+            1) new_prov="gemini" ;;
+            2) new_prov="groq" ;;
+            3) new_prov="claude" ;;
+            4) new_prov="openai" ;;
+            *)
+                echo -e "${C_RED}Invalid choice. Please select 1, 2, 3, or 4.${C_RESET}"
+                ;;
+        esac
+    done
+
+    echo -ne "${C_BOLD}Paste your ${new_prov^^} API key (input hidden): ${C_RESET}"
+    if [[ -t 0 ]]; then
+        read -rs api_key
+        echo ""
+    else
+        read -r api_key || api_key=""
+    fi
+
+    if [[ -z "${api_key}" ]]; then
+        echo -e "${C_RED}[!] No key entered. Operation cancelled.${C_RESET}" >&2
+        exit 1
+    fi
+
+    printf "%s" "${api_key}" | secret-tool store --label="Should-i-Update API Key (${new_prov})" service should-i-update provider "${new_prov}"
+    echo -e "${C_GREEN}✓ API key saved into Linux Secret Service.${C_RESET}"
+
+    # Update config using engine/config.py to preserve other settings and custom models per provider
+    NEW_MODEL="$(PYTHONPATH="${ENGINE_DIR}" python3 -c "
+from engine.config import set_provider
+cfg = set_provider('${new_prov}')
+print(cfg.get('curr_model', ''))
+")"
+    echo -e "${C_GREEN}✓ Provider successfully changed from '${old_prov}' to '${new_prov}' (model: ${NEW_MODEL})!${C_RESET}"
+    exit 0
+}
+
+show_help() {
+    echo -e "${C_BOLD}Should-i-Update (v${VERSION})${C_RESET}
+Intelligent package update evaluator for Arch Linux and CachyOS.
+
+${C_BOLD}USAGE:${C_RESET}
+    should-i-update [OPTIONS]
+
+${C_BOLD}OPTIONS:${C_RESET}
+    -h, --help            Show this help message and exit
+    -v, --version         Show version information
+    --configure           Launch the full interactive setup wizard
+    --replace-key         Replace API key for the current active provider
+    --reset-key           Delete current API key from Linux Secret Service
+    --change-provider     Switch LLM provider and configure its API key
+    --dry-run             Analyze pending updates without prompting to update
+    --no-aur              Skip checking AUR packages
+    --aur                 Force checking AUR packages (overriding config)
+    --provider <name>     Override LLM provider for a single run
+    --model <model>       Override LLM model name for a single run
+    --raw                 Output raw JSON from the LLM
+    --update-cmd <cmd>    Override update command to run if accepted
+
+${C_BOLD}EXAMPLES:${C_RESET}
+    should-i-update                     # Normal check, analysis, and update prompt
+    should-i-update --dry-run           # Just view recommendations
+    should-i-update --replace-key       # Quickly update API key for current provider
+    should-i-update --reset-key         # Reset key with next-step instructions
+    should-i-update --change-provider   # Switch provider while preserving settings
+    should-i-update --configure         # Reconfigure all settings"
+}
+
+# CLI Flags
+DRY_RUN=false
+FORCE_AUR=""
+CLI_PROVIDER=""
+CLI_MODEL=""
+RAW_OUTPUT=false
+CUSTOM_UPDATE_CMD=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -v|--version)
+            echo "Should-i-Update v${VERSION}"
+            exit 0
+            ;;
+        --configure)
+            if [[ -f "${SCRIPT_DIR}/install.sh" ]]; then
+                exec bash "${SCRIPT_DIR}/install.sh" --config-only
+            elif [[ -f "${HOME}/.local/share/should-i-update/install.sh" ]]; then
+                exec bash "${HOME}/.local/share/should-i-update/install.sh" --config-only
+            else
+                echo -e "${C_RED}[!] Could not find installer script to reconfigure.${C_RESET}"
+                exit 1
+            fi
+            ;;
+        --reset-key)
+            handle_reset_key
+            ;;
+        --replace-key)
+            handle_replace_key
+            ;;
+        --change-provider)
+            handle_change_provider
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --no-aur)
+            FORCE_AUR="false"
+            shift
+            ;;
+        --aur)
+            FORCE_AUR="true"
+            shift
+            ;;
+        --raw)
+            RAW_OUTPUT=true
+            shift
+            ;;
+        --provider)
+            CLI_PROVIDER="$2"
+            shift 2
+            ;;
+        --model)
+            CLI_MODEL="$2"
+            shift 2
+            ;;
+        --update-cmd)
+            CUSTOM_UPDATE_CMD="$2"
+            shift 2
+            ;;
+        *)
+            echo -e "${C_RED}[!] Unknown option: $1${C_RESET}" >&2
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# Check prerequisites
+if ! command -v checkupdates &>/dev/null; then
+    echo -e "${C_RED}[!] 'checkupdates' is not installed.${C_RESET}" >&2
+    echo -e "    Please install 'pacman-contrib' via: ${C_BOLD}sudo pacman -S pacman-contrib${C_RESET}" >&2
+    exit 1
+fi
+
+if ! command -v python3 &>/dev/null; then
+    echo -e "${C_RED}[!] 'python3' is not installed.${C_RESET}" >&2
+    exit 1
+fi
+
+# Load config options
+CONFIG_PROVIDER="$(read_config_val "provider" "gemini")"
+PROVIDER="${CLI_PROVIDER:-$CONFIG_PROVIDER}"
+
+CONFIG_CHECK_AUR="$(read_config_val "check_aur" "true")"
+CHECK_AUR="${CONFIG_CHECK_AUR}"
+if [[ -n "${FORCE_AUR}" ]]; then
+    CHECK_AUR="${FORCE_AUR}"
+fi
+
+AUR_HELPER="$(read_config_val "aur_helper" "yay")"
+UPDATE_CMD="$(read_config_val "update_command" "sudo pacman -Syu")"
+if [[ -n "${CUSTOM_UPDATE_CMD}" ]]; then
+    UPDATE_CMD="${CUSTOM_UPDATE_CMD}"
+fi
+
+TMP_DIR="$(mktemp -d /tmp/should-i-update.XXXXXX)"
+trap 'rm -rf "${TMP_DIR}"' EXIT
+
+PKGS_FILE="${TMP_DIR}/packages.txt"
+touch "${PKGS_FILE}"
+
+if [[ "${RAW_OUTPUT}" == "false" ]]; then
+    echo -ne "\r\033[K${C_CYAN}::${C_RESET} ${C_BOLD}Checking for official package updates...${C_RESET}"
+fi
+
+# 1. Official updates via checkupdates
+# checkupdates returns exit 2 when no updates are found
+CHECK_OUT="$(checkupdates 2>/dev/null || true)"
+if [[ -n "${CHECK_OUT}" ]]; then
+    while IFS= read -r line; do
+        if [[ -n "${line}" ]]; then
+            echo "[repo] ${line}" >> "${PKGS_FILE}"
+        fi
+    done <<< "${CHECK_OUT}"
+fi
+
+# 2. AUR updates if enabled
+if [[ "${CHECK_AUR,,}" == "true" ]]; then
+    if command -v "${AUR_HELPER}" &>/dev/null; then
+        if [[ "${RAW_OUTPUT}" == "false" ]]; then
+            echo -ne "\r\033[K${C_CYAN}::${C_RESET} ${C_BOLD}Checking for AUR updates (${AUR_HELPER})...${C_RESET}"
+        fi
+        AUR_OUT=""
+        if [[ "${AUR_HELPER}" == "yay" ]]; then
+            AUR_OUT="$(yay -Qua --color never 2>/dev/null || true)"
+        elif [[ "${AUR_HELPER}" == "paru" ]]; then
+            AUR_OUT="$(paru -Qua --color never 2>/dev/null || true)"
+        fi
+
+        if [[ -n "${AUR_OUT}" ]]; then
+            while IFS= read -r line; do
+                if [[ -n "${line}" ]]; then
+                    echo "[aur] ${line}" >> "${PKGS_FILE}"
+                fi
+            done <<< "${AUR_OUT}"
+        fi
+    fi
+fi
+
+TOTAL_UPDATES=$(wc -l < "${PKGS_FILE}" | tr -d ' ')
+
+if [[ "${TOTAL_UPDATES}" -eq 0 ]]; then
+    if [[ "${RAW_OUTPUT}" == "true" ]]; then
+        echo '{"verdict":"UP_TO_DATE","summary":"System is up to date.","categories":{}}'
+    else
+        echo -e "${C_GREEN}:: System is already up to date! No packages need updating.${C_RESET}"
+    fi
+    exit 0
+fi
+
+if [[ "${RAW_OUTPUT}" == "false" ]]; then
+    echo -e "\r\033[K${C_CYAN}::${C_RESET} Found ${C_BOLD}${TOTAL_UPDATES}${C_RESET} pending package update(s)."
+fi
+
+# Spinner while LLM engine runs
+SPINNER_PID=""
+start_spinner() {
+    local msg="$1"
+    local spin_chars="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    (
+        while true; do
+            for (( i=0; i<${#spin_chars}; i++ )); do
+                echo -ne "\r${C_CYAN}${spin_chars:$i:1}${C_RESET} ${msg}" >&2
+                sleep 0.1
+            done
+        done
+    ) &
+    SPINNER_PID=$!
+}
+
+stop_spinner() {
+    if [[ -n "${SPINNER_PID}" ]]; then
+        kill "${SPINNER_PID}" 2>/dev/null || true
+        wait "${SPINNER_PID}" 2>/dev/null || true
+        echo -ne "\r\033[K" >&2
+        SPINNER_PID=""
+    fi
+}
+
+PY_ARGS=()
+ANALYSIS_JSON="${TMP_DIR}/analysis.json"
+PY_ARGS+=(--save-json "${ANALYSIS_JSON}")
+
+if [[ -n "${CLI_PROVIDER}" ]]; then
+    PY_ARGS+=(--provider "${CLI_PROVIDER}")
+fi
+if [[ -n "${CLI_MODEL}" ]]; then
+    PY_ARGS+=(--model "${CLI_MODEL}")
+fi
+if [[ "${RAW_OUTPUT}" == "true" ]]; then
+    PY_ARGS+=(--raw)
+fi
+
+ENGINE_OUTPUT="${TMP_DIR}/engine_output.txt"
+ENGINE_ERROR="${TMP_DIR}/engine_error.txt"
+
+if [[ "${RAW_OUTPUT}" == "false" ]]; then
+    start_spinner "Analyzing packages with ${PROVIDER}..."
+fi
+
+# Execute Python engine
+set +e
+PYTHONPATH="${ENGINE_DIR}" python3 -m engine "${PY_ARGS[@]}" "${PKGS_FILE}" > "${ENGINE_OUTPUT}" 2> "${ENGINE_ERROR}"
+PY_EXIT=$?
+set -e
+
+if [[ "${RAW_OUTPUT}" == "false" ]]; then
+    stop_spinner
+fi
+
+if [[ ${PY_EXIT} -ne 0 ]]; then
+    cat "${ENGINE_ERROR}" >&2
+    exit ${PY_EXIT}
+fi
+
+# Print report or raw JSON
+cat "${ENGINE_OUTPUT}"
+
+# Prompt to proceed if not dry run or raw output
+if [[ "${DRY_RUN}" == "false" && "${RAW_OUTPUT}" == "false" ]]; then
+    echo -e "${C_GRAY}───────────────────────────────────────────────────────────────────${C_RESET}"
+    echo -e "${C_BOLD}Select update action:${C_RESET}"
+    echo -e "  ${C_CYAN}0)${C_RESET} ${C_BOLD}All pending updates${C_RESET} ${C_DIM}(Full system update: ${UPDATE_CMD})${C_RESET}"
+    echo -e "  ${C_CYAN}1)${C_RESET} ${C_BOLD}UPNOW only${C_RESET} ${C_RED}(Critical security & kernel patches)${C_RESET}"
+    echo -e "  ${C_CYAN}2)${C_RESET} ${C_BOLD}COOLFEAT only${C_RESET} ${C_CYAN}(Notable features & major leaps)${C_RESET}"
+    echo -e "  ${C_CYAN}3)${C_RESET} ${C_BOLD}IFYOUWANT only${C_RESET} ${C_YELLOW}(Routine maintenance)${C_RESET}"
+    echo -e "  ${C_CYAN}4)${C_RESET} ${C_BOLD}REDUNDANT only${C_RESET} ${C_GRAY}(Low priority rebuilds & docs)${C_RESET}"
+    echo -e "  ${C_DIM}(Mix choices: e.g. '1,2' or range '1-3' / '1--3')${C_RESET}"
+
+    echo -ne "\n${C_BOLD}Choose updates to apply [0-4, range, 'c' for custom, 'n' to cancel] (default: 0): ${C_RESET}"
+    read -r choice < /dev/tty || choice=""
+    choice="${choice:-0}"
+
+    case "${choice}" in
+        [nN]*|[qQ]*)
+            echo -e "${C_YELLOW}:: Update postponed.${C_RESET}"
+            exit 0
+            ;;
+        [cC]*)
+            echo -ne "${C_BOLD}Enter custom update command:${C_RESET} "
+            read -r user_cmd < /dev/tty
+            if [[ -n "${user_cmd}" ]]; then
+                echo -e "${C_CYAN}:: Executing: ${user_cmd}${C_RESET}"
+                eval "${user_cmd}"
+            fi
+            exit 0
+            ;;
+        0|[aA][lL][lL]|[yY]*)
+            echo -e "${C_CYAN}:: Executing full system update: ${UPDATE_CMD}${C_RESET}"
+            eval "${UPDATE_CMD}"
+            exit 0
+            ;;
+    esac
+
+    # Parse numeric choices, comma-separated lists, and ranges (e.g. 1, 1,2, 1-3, 1--3)
+    selected_cats=()
+    normalized_choice="${choice//--/-}"
+    IFS=',' read -ra tokens <<< "${normalized_choice}"
+    for tok in "${tokens[@]}"; do
+        tok="$(echo "${tok}" | tr -d ' ')"
+        if [[ "${tok}" =~ ^([1-4])-([1-4])$ ]]; then
+            r_start="${BASH_REMATCH[1]}"
+            r_end="${BASH_REMATCH[2]}"
+            if (( r_start > r_end )); then tmp=$r_start; r_start=$r_end; r_end=$tmp; fi
+            for (( i=r_start; i<=r_end; i++ )); do
+                case $i in
+                    1) selected_cats+=("UPNOW") ;;
+                    2) selected_cats+=("COOLFEAT") ;;
+                    3) selected_cats+=("IFYOUWANT") ;;
+                    4) selected_cats+=("REDUNDANT") ;;
+                esac
+            done
+        elif [[ "${tok}" =~ ^[1-4]$ ]]; then
+            case "${tok}" in
+                1) selected_cats+=("UPNOW") ;;
+                2) selected_cats+=("COOLFEAT") ;;
+                3) selected_cats+=("IFYOUWANT") ;;
+                4) selected_cats+=("REDUNDANT") ;;
+            esac
+        fi
+    done
+
+    # Remove duplicates while preserving order
+    unique_cats=()
+    for cat_name in "UPNOW" "COOLFEAT" "IFYOUWANT" "REDUNDANT"; do
+        for s in "${selected_cats[@]}"; do
+            if [[ "$s" == "$cat_name" ]]; then
+                unique_cats+=("$cat_name")
+                break
+            fi
+        done
+    done
+
+    if [[ ${#unique_cats[@]} -eq 0 ]]; then
+        echo -e "${C_RED}[!] Invalid choice '${choice}'. Operation cancelled.${C_RESET}" >&2
+        exit 1
+    fi
+
+    # Extract target packages from saved analysis JSON
+    TARGET_PKGS="$(python3 -c "
+import json, sys
+try:
+    with open('${ANALYSIS_JSON}', 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    cats = set(sys.argv[1:])
+    pkgs = []
+    for c in ['UPNOW', 'COOLFEAT', 'IFYOUWANT', 'REDUNDANT']:
+        if c in cats:
+            for item in data.get('categories', {}).get(c, []):
+                p = item.get('pkg') if isinstance(item, dict) else str(item)
+                if p and p not in pkgs:
+                    pkgs.append(p)
+    print(' '.join(pkgs))
+except Exception:
+    pass
+" "${unique_cats[@]}")"
+
+    if [[ -z "${TARGET_PKGS}" ]]; then
+        echo -e "${C_YELLOW}:: No pending packages found in selected category/categories [${unique_cats[*]}].${C_RESET}"
+        exit 0
+    fi
+
+    PKG_COUNT=$(echo "${TARGET_PKGS}" | wc -w)
+    echo -e "${C_CYAN}:: Installing ${C_BOLD}${PKG_COUNT}${C_RESET}${C_CYAN} package(s) from [${C_BOLD}${unique_cats[*]}${C_RESET}${C_CYAN}]:${C_RESET}"
+
+    if command -v "${AUR_HELPER}" &>/dev/null; then
+        eval "${AUR_HELPER} -S --needed ${TARGET_PKGS}"
+    else
+        eval "sudo pacman -S --needed ${TARGET_PKGS}"
+    fi
+fi
