@@ -1,4 +1,4 @@
 """Should-i-Update Python Engine"""
 
-__version__ = "1.0.0"
+__version__ = "0.2.2-beta.2"
 
