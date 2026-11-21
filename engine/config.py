@@ -5,14 +5,14 @@ from typing import Any, Dict, Optional
 
 DEFAULT_MODELS: Dict[str, str] = {
     "gemini": "gemini-3-6-flash",
-    "openrouter": "openrouter/auto",
+    "openrouter": "openrouter/free",
     "claude": "claude-3-5-haiku-20241022",
     "openai": "gpt-4o-mini",
 }
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "provider": "gemini",
-    "curr_model": "",
+    "curr_model": "", 
     "saved_models": {},
     "request_timeout": 180,
     "check_aur": True,

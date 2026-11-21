@@ -21,7 +21,7 @@ class OpenRouterProvider(BaseProvider):
         url = f"{self.base_url.rstrip('/')}/chat/completions"
 
         payload = {
-            "model": self.model or "openrouter/auto",
+            "model": self.model or "openrouter/free",
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": system_prompt},

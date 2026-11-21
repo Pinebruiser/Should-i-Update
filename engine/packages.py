@@ -113,7 +113,6 @@ def prioritize_packages(packages: List[PackageUpdate]) -> List[PackageUpdate]:
         return points
 
     return sorted(packages, key=score, reverse=True)
-zq
 
 def reconcile_omitted_packages(result: Dict[str, Any], packages: List[PackageUpdate]) -> Dict[str, Any]:
     """Ensure every pending package is categorized. Any package omitted by the LLM

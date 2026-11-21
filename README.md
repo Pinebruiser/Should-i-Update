@@ -81,7 +81,7 @@ Preferences are stored in `~/.config/should-i-update/config.json`. Note that API
   "curr_model": "gemini-3.6-flash",
   "saved_models": {
     "gemini": "gemini-3.6-flash",
-    "openrouter": "openrouter/auto"
+    "openrouter": "openrouter/free"
   },
   "request_timeout": 180,
   "check_aur": true,
