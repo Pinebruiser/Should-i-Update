@@ -4,7 +4,7 @@
 # ==============================================================================
 set -eo pipefail
 
-REPO_URL="https://github.com/m-ammar-02/Should-i-Update"
+REPO_URL="https://github.com/Pinebruiser/Should-i-Update"
 REPO_BRANCH="main"
 
 VERSION="0.1.0-beta.1"
@@ -95,7 +95,7 @@ handle_change_provider() {
 
     echo -e "${C_BLUE}==>${C_RESET} ${C_BOLD}Select new LLM Provider:${C_RESET}"
     echo -e "  ${C_CYAN}1)${C_RESET} ${C_BOLD}Google Gemini${C_RESET}   ${C_GREEN}(Free Tier available, fast, recommended)${C_RESET}"
-    echo -e "  ${C_CYAN}2)${C_RESET} ${C_BOLD}Groq Cloud${C_RESET}      ${C_GREEN}(Free Tier, ultra-fast 120B open model)${C_RESET}"
+    echo -e "  ${C_CYAN}2)${C_RESET} ${C_BOLD}OpenRouter${C_RESET}      ${C_GREEN}(Auto / Open models, free & paid)${C_RESET}"
     echo -e "  ${C_CYAN}3)${C_RESET} ${C_BOLD}Anthropic Claude${C_RESET} (Claude 3.5 Haiku / Sonnet)"
     echo -e "  ${C_CYAN}4)${C_RESET} ${C_BOLD}OpenAI${C_RESET}          (GPT-4o-mini / GPT-4o)"
 
@@ -111,7 +111,7 @@ handle_change_provider() {
         prov_choice="${prov_choice:-1}"
         case "${prov_choice}" in
             1) new_prov="gemini" ;;
-            2) new_prov="groq" ;;
+            2) new_prov="openrouter" ;;
             3) new_prov="claude" ;;
             4) new_prov="openai" ;;
             *)
@@ -218,7 +218,7 @@ cat <<'EOF'
 EOF
 echo -e "${C_RESET}"
 echo -e "${C_BOLD}Intelligent Arch Linux Package Update Decision Assistant${C_RESET}"
-echo -e "${C_DIM}https://github.com/m-ammar-02/Should-i-Update${C_RESET}\n"
+echo -e "${C_DIM}https://github.com/Pinebruiser/Should-i-Update${C_RESET}\n"
 
 # ==============================================================================
 # Step 1: Check Dependencies
@@ -267,7 +267,7 @@ fi
 # ==============================================================================
 echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 2/5] Select LLM Provider:${C_RESET}"
 echo -e "  ${C_CYAN}1)${C_RESET} ${C_BOLD}Google Gemini${C_RESET}   ${C_GREEN}(Free Tier available, fast, recommended)${C_RESET}"
-echo -e "  ${C_CYAN}2)${C_RESET} ${C_BOLD}Groq Cloud${C_RESET}      ${C_GREEN}(Free Tier, ultra-fast 120B open model)${C_RESET}"
+echo -e "  ${C_CYAN}2)${C_RESET} ${C_BOLD}OpenRouter${C_RESET}      ${C_GREEN}(Auto / Open models, free & paid)${C_RESET}"
 echo -e "  ${C_CYAN}3)${C_RESET} ${C_BOLD}Anthropic Claude${C_RESET} (Claude 3.5 Haiku / Sonnet)"
 echo -e "  ${C_CYAN}4)${C_RESET} ${C_BOLD}OpenAI${C_RESET}          (GPT-4o-mini / GPT-4o)"
 
@@ -279,7 +279,7 @@ while [[ -z "${SELECTED_PROVIDER}" ]]; do
     prov_choice="${prov_choice:-1}"
     case "${prov_choice}" in
         1) SELECTED_PROVIDER="gemini" ;;
-        2) SELECTED_PROVIDER="groq" ;;
+        2) SELECTED_PROVIDER="openrouter" ;;
         3) SELECTED_PROVIDER="claude" ;;
         4) SELECTED_PROVIDER="openai" ;;
         *)

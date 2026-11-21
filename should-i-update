@@ -108,7 +108,7 @@ handle_change_provider() {
 
     echo -e "${C_BLUE}==>${C_RESET} ${C_BOLD}Select new LLM Provider:${C_RESET}"
     echo -e "  ${C_CYAN}1)${C_RESET} ${C_BOLD}Google Gemini${C_RESET}   ${C_GREEN}(Free Tier available, fast, recommended)${C_RESET}"
-    echo -e "  ${C_CYAN}2)${C_RESET} ${C_BOLD}Groq Cloud${C_RESET}      ${C_GREEN}(Free Tier, ultra-fast 120B open model)${C_RESET}"
+    echo -e "  ${C_CYAN}2)${C_RESET} ${C_BOLD}OpenRouter${C_RESET}      ${C_GREEN}(Auto / Open models, free & paid)${C_RESET}"
     echo -e "  ${C_CYAN}3)${C_RESET} ${C_BOLD}Anthropic Claude${C_RESET} (Claude 3.5 Haiku / Sonnet)"
     echo -e "  ${C_CYAN}4)${C_RESET} ${C_BOLD}OpenAI${C_RESET}          (GPT-4o-mini / GPT-4o)"
 
@@ -124,7 +124,7 @@ handle_change_provider() {
         prov_choice="${prov_choice:-1}"
         case "${prov_choice}" in
             1) new_prov="gemini" ;;
-            2) new_prov="groq" ;;
+            2) new_prov="openrouter" ;;
             3) new_prov="claude" ;;
             4) new_prov="openai" ;;
             *)
@@ -178,6 +178,7 @@ ${C_BOLD}OPTIONS:${C_RESET}
     --aur                 Force checking AUR packages (overriding config)
     --provider <name>     Override LLM provider for a single run
     --model <model>       Override LLM model name for a single run
+    --timeout <seconds>   Override request timeout in seconds (default: 180)
     --raw                 Output raw JSON from the LLM
     --update-cmd <cmd>    Override update command to run if accepted
 
@@ -195,6 +196,7 @@ DRY_RUN=false
 FORCE_AUR=""
 CLI_PROVIDER=""
 CLI_MODEL=""
+CLI_TIMEOUT=""
 RAW_OUTPUT=false
 CUSTOM_UPDATE_CMD=""
 
@@ -249,6 +251,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --model)
             CLI_MODEL="$2"
+            shift 2
+            ;;
+        --timeout)
+            CLI_TIMEOUT="$2"
             shift 2
             ;;
         --update-cmd)
@@ -385,6 +391,9 @@ fi
 if [[ -n "${CLI_MODEL}" ]]; then
     PY_ARGS+=(--model "${CLI_MODEL}")
 fi
+if [[ -n "${CLI_TIMEOUT}" ]]; then
+    PY_ARGS+=(--timeout "${CLI_TIMEOUT}")
+fi
 if [[ "${RAW_OUTPUT}" == "true" ]]; then
     PY_ARGS+=(--raw)
 fi
@@ -406,7 +415,25 @@ if [[ "${RAW_OUTPUT}" == "false" ]]; then
     stop_spinner
 fi
 
-if [[ ${PY_EXIT} -ne 0 ]]; then
+if [[ ${PY_EXIT} -eq 53 ]]; then
+    echo -e "\n${C_YELLOW}[!] AI analysis temporarily unavailable (HTTP 503: Provider Service Overloaded).${C_RESET}"
+    echo -e "${C_BOLD}Pending package update(s) (${TOTAL_COUNT}):${C_RESET}"
+    cat "${PKGS_FILE}"
+    echo ""
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        exit 53
+    fi
+    echo -ne "${C_BOLD}Proceed with standard update command (${UPDATE_CMD})? [Y/n]: ${C_RESET}"
+    read -r fallback_choice < /dev/tty || fallback_choice="Y"
+    fallback_choice="${fallback_choice:-Y}"
+    if [[ "${fallback_choice}" =~ ^[Yy]$ || -z "${fallback_choice}" ]]; then
+        echo -e "${C_CYAN}:: Executing: ${UPDATE_CMD}${C_RESET}"
+        eval "${UPDATE_CMD}"
+    else
+        echo -e "${C_YELLOW}:: Update postponed.${C_RESET}"
+    fi
+    exit 0
+elif [[ ${PY_EXIT} -ne 0 ]]; then
     cat "${ENGINE_ERROR}" >&2
     exit ${PY_EXIT}
 fi

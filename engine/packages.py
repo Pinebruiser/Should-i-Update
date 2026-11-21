@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 # High-priority package prefixes and names to highlight
 CORE_PACKAGES = {
@@ -113,4 +113,39 @@ def prioritize_packages(packages: List[PackageUpdate]) -> List[PackageUpdate]:
         return points
 
     return sorted(packages, key=score, reverse=True)
+zq
+
+def reconcile_omitted_packages(result: Dict[str, Any], packages: List[PackageUpdate]) -> Dict[str, Any]:
+    """Ensure every pending package is categorized. Any package omitted by the LLM
+    is automatically placed into REDUNDANT so no package is lost.
+    """
+    if not isinstance(result, dict):
+        return result
+
+    if "categories" not in result or not isinstance(result["categories"], dict):
+        result["categories"] = {"UPNOW": [], "COOLFEAT": [], "IFYOUWANT": [], "REDUNDANT": []}
+
+    categories = result["categories"]
+    for cat in ["UPNOW", "COOLFEAT", "IFYOUWANT", "REDUNDANT"]:
+        if cat not in categories or not isinstance(categories[cat], list):
+            categories[cat] = []
+
+    categorized_names = set()
+    for cat_items in categories.values():
+        if isinstance(cat_items, list):
+            for item in cat_items:
+                if isinstance(item, dict) and "pkg" in item:
+                    categorized_names.add(item["pkg"].strip().lower())
+                elif isinstance(item, str):
+                    categorized_names.add(item.strip().lower())
+
+    for pkg in packages:
+        if pkg.name.strip().lower() not in categorized_names:
+            categories["REDUNDANT"].append({
+                "pkg": pkg.name,
+                "version": pkg.display_diff,
+            })
+            categorized_names.add(pkg.name.strip().lower())
+
+    return result
 

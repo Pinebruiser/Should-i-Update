@@ -1,12 +1,13 @@
 {
   "provider": "gemini",
-  "curr_model": "gemini-3.8-flash",
+  "curr_model": "gemini-3.6-flash",
   "saved_models": {
-    "gemini": "gemini-3.8-flash",
-    "groq": "openai/gpt-oss-120b",
+    "gemini": "gemini-3.6-flash",
+    "openrouter": "openrouter/auto",
     "claude": "claude-3-5-haiku-20241022",
     "openai": "gpt-4o-mini"
   },
+  "request_timeout": 180,
   "check_aur": true,
   "aur_helper": "yay",
   "update_command": "sudo pacman -Syu",

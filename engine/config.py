@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 DEFAULT_MODELS: Dict[str, str] = {
-    "gemini": "gemini-3.8-flash",
-    "groq": "openai/gpt-oss-120b",
+    "gemini": "gemini-3-6-flash",
+    "openrouter": "openrouter/auto",
     "claude": "claude-3-5-haiku-20241022",
     "openai": "gpt-4o-mini",
 }
@@ -14,6 +14,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "provider": "gemini",
     "curr_model": "",
     "saved_models": {},
+    "request_timeout": 180,
     "check_aur": True,
     "aur_helper": "yay",
     "update_command": "sudo pacman -Syu",

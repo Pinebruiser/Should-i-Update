@@ -17,7 +17,7 @@ Instead of blindly running `pacman -Syu`, `Should-i-Update` inspects your pendin
 - **Up-To-Date Knowledge:** Injects recent Arch Linux RSS news and package metadata directly into prompts to eliminate LLM training cutoff issues.
 - **Lightweight Engine:** Built purely with Python standard library HTTP (`urllib.request`). No heavy SDKs or virtual environment bloat.
 - **AUR Integration:** Optionally checks and categorizes AUR updates using `yay -Qua` or `paru -Qua`.
-- **Flexible Providers:** Supports Google Gemini (free tier), Groq (free tier), Anthropic Claude, and OpenAI.
+- **Flexible Providers:** Supports Google Gemini (free tier), OpenRouter (auto-routing & free/paid models), Anthropic Claude, and OpenAI.
 
 ---
 
@@ -26,7 +26,7 @@ Instead of blindly running `pacman -Syu`, `Should-i-Update` inspects your pendin
 Run the one-line installer:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/m-ammar-02/Should-i-Update/main/install.sh | bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Pinebruiser/Should-i-Update/main/install.sh)"
 ```
 
 The installer verifies prerequisites (`pacman-contrib`, `python`, `libsecret`), prompts for your preferred provider, safely configures the Linux Secret Service, and links `should-i-update` to `~/.local/bin/`.
@@ -50,8 +50,9 @@ should-i-update
 | `--reset-key` | Remove current API key from Linux Secret Service with next-step guidance |
 | `--change-provider` | Switch to a new provider and store its API key |
 | `--configure` | Re-run the full interactive setup wizard |
-| `--provider <name>` | Override provider for a single run (`gemini`, `groq`, `claude`, `openai`) |
+| `--provider <name>` | Override provider for a single run (`gemini`, `openrouter`, `claude`, `openai`) |
 | `--model <model>` | Override the model name for a single run |
+| `--timeout <seconds>` | Override request timeout in seconds (default: 180) |
 | `--no-aur` | Skip AUR package checks |
 | `--aur` | Force AUR package checks |
 | `--raw` | Output raw JSON for automation and scripting |
@@ -63,8 +64,8 @@ should-i-update
 
 | Provider | Default Model | Notes |
 | :--- | :--- | :--- |
-| **Google Gemini** | `gemini-3.8-flash` | Free tier available via Google AI Studio (recommended default) |
-| **Groq Cloud** | `openai/gpt-oss-120b` | Free tier, ultra-fast LPU inference (120B parameter open model) |
+| **Google Gemini** | `gemini-3.6-flash` | Free tier available via Google AI Studio (recommended default) |
+| **OpenRouter** | `openrouter/auto` | Auto-routing across models, free & paid open model support |
 | **Anthropic Claude** | `claude-3-5-haiku-20241022` | Cost-effective, high quality reasoning |
 | **OpenAI** | `gpt-4o-mini` | Fast and lightweight |
 
@@ -77,11 +78,12 @@ Preferences are stored in `~/.config/should-i-update/config.json`. Note that API
 ```json
 {
   "provider": "gemini",
-  "curr_model": "gemini-3.8-flash",
+  "curr_model": "gemini-3.6-flash",
   "saved_models": {
-    "gemini": "gemini-3.8-flash",
-    "groq": "openai/gpt-oss-120b"
+    "gemini": "gemini-3.6-flash",
+    "openrouter": "openrouter/auto"
   },
+  "request_timeout": 180,
   "check_aur": true,
   "aur_helper": "yay",
   "update_command": "sudo cachyos-rate-mirrors && yay -Syu",

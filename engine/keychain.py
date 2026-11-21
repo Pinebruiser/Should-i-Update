@@ -5,7 +5,7 @@ from typing import Optional
 
 ENV_MAP = {
     "gemini": "GEMINI_API_KEY",
-    "groq": "GROQ_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
     "claude": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
 }

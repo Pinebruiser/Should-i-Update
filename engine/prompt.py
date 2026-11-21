@@ -17,8 +17,8 @@ Important guidelines:
 - If a package is mentioned in Arch Linux News, prioritize it under UPNOW or COOLFEAT and state the advisory context.
 - For packages under UPNOW and COOLFEAT: Provide a concrete, informative 1-2 sentence explanation specifying the exact technical reasons (e.g., specific vulnerability/CVE types, security risks, kernel/ABI breakages, or distinct new capabilities). Avoid vague generic filler like "routine improvements".
 - Do NOT provide reasons for packages under IFYOUWANT or REDUNDANT (only include their pkg and version) to conserve output tokens.
--if you are unsure about where to place a package , then place it in IFYOUWANT category.
--not a single package should be omitted if the package reason cannot be defind then place it REDUNDANT cateogry.
+-if you are unsure about where to place a package , then place it in IFYOUWANT.
+-not a single package should be omitted.
 - Provide an overarching verdict: "UPGRADE_NOW", "UPGRADE_RECOMMENDED", or "SAFE_TO_WAIT".
 - Provide a comprehensive, actionable overall summary (2-3 sentences) highlighting primary system risks, critical components involved, and concrete guidance on whether to upgrade immediately or wait.
 

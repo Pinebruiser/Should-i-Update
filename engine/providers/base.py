@@ -3,13 +3,18 @@ import re
 from typing import Any, Dict
 
 
+class ServiceUnavailableError(RuntimeError):
+    """Raised when an upstream LLM provider returns HTTP 503 (service overloaded or unavailable)."""
+    pass
+
+
 class BaseProvider:
     def __init__(self, model: str, api_key: str = "", base_url: str = ""):
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
 
-    def query(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+    def query(self, system_prompt: str, user_prompt: str, timeout: int = 180) -> Dict[str, Any]:
         raise NotImplementedError
 
     @staticmethod

@@ -7,15 +7,17 @@ from .config import get_default_model, load_config
 from .formatter import render_report
 from .keychain import get_api_key
 from .news import fetch_arch_news, find_news_matches
-from .packages import PackageUpdate, parse_package_line, prioritize_packages
+from .packages import PackageUpdate, parse_package_line, prioritize_packages, reconcile_omitted_packages
 from .prompt import SYSTEM_PROMPT, build_user_prompt
 from .providers import get_provider
+from .providers.base import ServiceUnavailableError
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Should-i-Update Analysis Engine")
     parser.add_argument("--provider", help="Override LLM provider")
     parser.add_argument("--model", help="Override LLM model name")
+    parser.add_argument("--timeout", type=int, help="Request timeout in seconds (default: 180)")
     parser.add_argument("--raw", action="store_true", help="Output raw JSON instead of formatted text")
     parser.add_argument("--no-news", action="store_true", help="Disable Arch Linux news check")
     parser.add_argument("--save-json", help="Save the raw JSON result to a specified file path")
@@ -85,10 +87,17 @@ def main() -> int:
     # Instantiate Provider and query
     try:
         provider = get_provider(provider_name, config, api_key=api_key)
-        result = provider.query(system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt)
+        timeout = args.timeout if args.timeout is not None else int(config.get("request_timeout", 180))
+        result = provider.query(system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt, timeout=timeout)
+    except ServiceUnavailableError as e:
+        sys.stderr.write(f"\n[!] Upstream provider unavailable (HTTP 503: Service Overloaded).\n")
+        return 53
     except Exception as e:
         sys.stderr.write(f"\n[!] Analysis failed: {e}\n")
         return 3
+
+    # Reconcile any packages omitted by the LLM into REDUNDANT
+    result = reconcile_omitted_packages(result, packages)
 
     if args.save_json:
         try:
