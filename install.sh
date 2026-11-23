@@ -223,7 +223,7 @@ echo -e "${C_DIM}https://github.com/Pinebruiser/Should-i-Update${C_RESET}\n"
 # ==============================================================================
 # Step 1: Check Dependencies
 # ==============================================================================
-echo -e "${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 1/5] Checking dependencies...${C_RESET}"
+echo -e "${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 1/6] Checking dependencies...${C_RESET}"
 
 MISSING_PKGS=()
 
@@ -265,7 +265,7 @@ fi
 # ==============================================================================
 # Step 2: Choose LLM Provider
 # ==============================================================================
-echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 2/5] Select LLM Provider:${C_RESET}"
+echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 2/6] Select LLM Provider:${C_RESET}"
 echo -e "  ${C_CYAN}1)${C_RESET} ${C_BOLD}Google Gemini${C_RESET}   ${C_GREEN}(Free Tier available, fast, recommended)${C_RESET}"
 echo -e "  ${C_CYAN}2)${C_RESET} ${C_BOLD}OpenRouter${C_RESET}      ${C_GREEN}(Auto / Open models, free & paid)${C_RESET}"
 echo -e "  ${C_CYAN}3)${C_RESET} ${C_BOLD}Anthropic Claude${C_RESET} (Claude 3.5 Haiku / Sonnet)"
@@ -299,7 +299,7 @@ echo -e "${C_GREEN}✓ Selected: ${SELECTED_PROVIDER} (model: ${SELECTED_MODEL})
 # ==============================================================================
 # Step 3: Keyring Storage & Authentication Setup
 # ==============================================================================
-echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 3/5] Authentication Setup:${C_RESET}"
+echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 3/6] Authentication Setup:${C_RESET}"
 echo -e ":: API keys are saved securely in the ${C_BOLD}Linux Secret Service${C_RESET} (GNOME Keyring / KWallet / KeePassXC)."
 echo -e "   ${C_DIM}They persist across reboots and are NEVER stored in plaintext config files.${C_RESET}"
 
@@ -331,9 +331,32 @@ if [[ "${SKIP_KEY_PROMPT}" != "true" ]]; then
 fi
 
 # ==============================================================================
-# Step 4: AUR Packages Preference
+# Step 4: LLM Request Timeout
 # ==============================================================================
-echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 4/5] Arch User Repository (AUR):${C_RESET}"
+echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 4/6] LLM Request Timeout:${C_RESET}"
+echo -e ":: Request timeout ensures the engine waits long enough for large package batches (300+ updates)."
+echo -e "   ${C_DIM}Default is 180 seconds (3 minutes).${C_RESET}"
+
+DEFAULT_TIMEOUT=180
+if [[ -f "${CONFIG_PATH}" ]]; then
+    DEFAULT_TIMEOUT="$(python3 -c "import json; cfg = json.load(open('${CONFIG_PATH}')); print(cfg.get('request_timeout', 180))" 2>/dev/null || echo 180)"
+fi
+
+echo -ne "${C_BOLD}Enter request timeout in seconds [default: ${DEFAULT_TIMEOUT}]: ${C_RESET}"
+read -r timeout_choice
+timeout_choice="${timeout_choice:-${DEFAULT_TIMEOUT}}"
+
+if [[ "${timeout_choice}" =~ ^[0-9]+$ ]] && [[ ${timeout_choice} -gt 0 ]]; then
+    REQUEST_TIMEOUT="${timeout_choice}"
+else
+    REQUEST_TIMEOUT="${DEFAULT_TIMEOUT}"
+fi
+echo -e "${C_GREEN}✓ Request timeout set to ${REQUEST_TIMEOUT}s.${C_RESET}"
+
+# ==============================================================================
+# Step 5: AUR Packages Preference
+# ==============================================================================
+echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 5/6] Arch User Repository (AUR):${C_RESET}"
 
 CHECK_AUR="true"
 if [[ -n "${AUR_HELPER}" ]]; then
@@ -351,9 +374,9 @@ else
 fi
 
 # ==============================================================================
-# Step 5: System Update Command & Installation
+# Step 6: System Update Command & Installation
 # ==============================================================================
-echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 5/5] Update Command & Setup:${C_RESET}"
+echo -e "\n${C_BLUE}==>${C_RESET} ${C_BOLD}[Step 6/6] Update Command & Setup:${C_RESET}"
 
 HAS_RATE_MIRRORS=false
 if command -v cachyos-rate-mirrors &>/dev/null; then
@@ -443,6 +466,7 @@ cat > "${CONFIG_PATH}" <<EOF
   "saved_models": {
     "${SELECTED_PROVIDER}": "${SELECTED_MODEL}"
   },
+  "request_timeout": ${REQUEST_TIMEOUT},
   "check_aur": ${CHECK_AUR},
   "aur_helper": "${AUR_HELPER}",
   "update_command": "${UPDATE_CMD}",
